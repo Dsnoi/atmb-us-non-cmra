@@ -185,7 +185,14 @@ pub struct LocationDetailPage {
 impl LocationDetailPage {
     pub fn parse_html(html: &str) -> color_eyre::Result<Self> {
         let document = Html::parse_document(html);
-        let address_container = document.select(&LOCATION_DETAIL_SELECTOR).next().unwrap();
+
+        // 🌟 修复点 1：安全地获取容器，找不到就抛出错误而不是崩溃
+        let address_container = match document.select(&LOCATION_DETAIL_SELECTOR).next() {
+            Some(container) => container,
+            None => bail!("Failed to find address container. The target element is missing, maybe the page structure changed or the page is a captcha/error page."),
+        };
+
+        // 这里的 unwrap 是安全的，因为 "div" 是写死的、绝对合法的 CSS 选择器
         let div_selector = Selector::parse("div").unwrap();
 
         let lines = address_container.select(&div_selector)
@@ -203,14 +210,15 @@ impl LocationDetailPage {
             7 => None,
             _ => bail!("Unexpected address line count: {}, page structure might be changed: {:?}", lines.len(), lines),
         };
+
         Ok(
             Self {
+                // 这里的 lines[1] 是安全的，因为如果是 0-3，上面的 match _ => bail!() 已经提前拦截并返回错误了
                 line1: lines[1].clone(),
                 line2,
             }
         )
     }
-
     /// concatenate line1 and line2
     pub fn street(&self) -> String {
         if let Some(line2) = &self.line2 {
